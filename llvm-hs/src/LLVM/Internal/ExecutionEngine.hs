@@ -1,6 +1,7 @@
 {-# LANGUAGE
   MultiParamTypeClasses,
   FunctionalDependencies,
+  OverloadedStrings,
   RankNTypes
   #-}
 module LLVM.Internal.ExecutionEngine where
@@ -10,7 +11,6 @@ import LLVM.Prelude
 import Control.Exception
 import Control.Monad.IO.Class
 import Control.Monad.AnyCont
-import Control.Monad.Trans.Except
 
 import Data.IORef
 import Foreign.Ptr
@@ -70,8 +70,8 @@ withExecutionEngine c m createEngine f = flip runAnyContT return $ do
   liftIO initializeNativeTarget
   outExecutionEngine <- alloca
   outErrorCStringPtr <- alloca
-  dummyModule <- maybe (anyContToM $ liftM (either undefined id) . runExceptT
-                            . withModuleFromAST c (A.Module "" "" Nothing Nothing []))
+  dummyModule <- maybe (anyContToM $
+                          withModuleFromAST c (A.Module "" "" Nothing Nothing []))
                  (liftIO . newModule) m
   dummyModule' <- readModule dummyModule
   r <- liftIO $ createEngine outExecutionEngine dummyModule' outErrorCStringPtr
@@ -106,10 +106,10 @@ withMCJIT c opt cm fpe fisel f = do
         size <- FFI.getMCJITCompilerOptionsSize
         allocaBytes (fromIntegral size) $ \p -> do
           FFI.initializeMCJITCompilerOptions p size
-          maybe (return ()) (FFI.setMCJITCompilerOptionsOptLevel p <=< encodeM) opt
-          maybe (return ()) (FFI.setMCJITCompilerOptionsCodeModel p <=< encodeM) cm
-          maybe (return ()) (FFI.setMCJITCompilerOptionsNoFramePointerElim p <=< encodeM) fpe
-          maybe (return ()) (FFI.setMCJITCompilerOptionsEnableFastISel p <=< encodeM) fisel
+          traverse_ (FFI.setMCJITCompilerOptionsOptLevel p <=< encodeM) opt
+          traverse_ (FFI.setMCJITCompilerOptionsCodeModel p <=< encodeM) cm
+          traverse_ (FFI.setMCJITCompilerOptionsNoFramePointerElim p <=< encodeM) fpe
+          traverse_ (FFI.setMCJITCompilerOptionsEnableFastISel p <=< encodeM) fisel
           FFI.createMCJITCompilerForModule e m p size s
   t <- newIORef (Deferred $ \mod f -> do m' <- readModule mod
                                          withExecutionEngine c (Just m') createMCJITCompilerForModule f)

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | This module and descendants define AST data types to represent LLVM code.
 -- Note that these types are designed for fidelity rather than convenience - if the truth
 -- of what LLVM supports is less than pretty, so be it.

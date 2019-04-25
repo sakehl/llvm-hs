@@ -4,13 +4,15 @@
 module LLVM.Prelude (
     module Prelude,
     module Data.Data,
+    module GHC.Generics,
     module Data.Int,
     module Data.Word,
     module Data.Functor,
     module Data.Foldable,
     module Data.Traversable,
     module Control.Applicative,
-    module Control.Monad
+    module Control.Monad,
+    fromMaybe
     ) where
 
 import Prelude hiding (
@@ -22,8 +24,10 @@ import Prelude hiding (
     concatMap,
     elem, notElem,
   )
-import Data.Data hiding (typeOf)
+import Data.Data (Data, Typeable)
+import GHC.Generics (Generic)
 import Data.Int
+import Data.Maybe (fromMaybe)
 import Data.Word
 import Data.Functor
 import Data.Foldable
@@ -35,3 +39,4 @@ import Control.Monad hiding (
     sequence, sequence_,
     msum
   )
+

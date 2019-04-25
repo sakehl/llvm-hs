@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module LLVM.Test.Optimization where
 
 import Test.Tasty
@@ -6,6 +7,7 @@ import Test.Tasty.HUnit
 import LLVM.Test.Support
 
 import Data.Functor
+import Data.Monoid
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
@@ -103,7 +105,7 @@ isVectory Module { moduleDefinitions = ds } =
    ]
 
 optimize :: PassSetSpec -> A.Module -> IO A.Module
-optimize pss m = withContext $ \context -> withModuleFromAST' context m $ \mIn' -> do
+optimize pss m = withContext $ \context -> withModuleFromAST context m $ \mIn' -> do
   withPassManager pss $ \pm -> runPassManager pm mIn'
   moduleAST mIn'
 
@@ -179,12 +181,12 @@ tests = testGroup "Optimization" [
            G.returnType = double,
             G.name = Name "foo",
             G.parameters = ([
-              Parameter double (Name (l ++ n)) []
+              Parameter double (Name (l <> n)) []
                 | l <- [ "a", "b" ], n <- ["1", "2"]
              ], False),
             G.basicBlocks = [
               BasicBlock (UnName 0) ([
-                Name (l ++ n) := op NoFastMathFlags (LocalReference double (Name (o1 ++ n))) (LocalReference double (Name (o2 ++ n))) []
+                Name (l <> n) := op NoFastMathFlags (LocalReference double (Name (o1 <> n))) (LocalReference double (Name (o2 <> n))) []
                 | (l, op, o1, o2) <- [
                    ("x", FSub, "a", "b"),
                    ("y", FMul, "x", "a"),
@@ -211,7 +213,7 @@ tests = testGroup "Optimization" [
             moduleName = "<string>",
             moduleSourceFileName = "<string>",
             moduleDataLayout = Just $ (defaultDataLayout BigEndian) { 
-              typeLayouts = Map.singleton (VectorAlign, 128) (AlignmentInfo 128 Nothing)
+              typeLayouts = Map.singleton (VectorAlign, 128) (AlignmentInfo 128 128)
              },
             moduleTargetTriple = Just "x86_64",
             moduleDefinitions = [
@@ -256,7 +258,7 @@ tests = testGroup "Optimization" [
            }
       mOut <- do
         let triple = "x86_64"
-        (target, _) <- failInIO $ lookupTarget Nothing triple
+        (target, _) <- lookupTarget Nothing triple
         withTargetOptions $ \targetOptions -> do
           withTargetMachine target triple "" Map.empty targetOptions R.Default CM.Default CGO.Default $ \tm -> do
             optimize (defaultPassSetSpec { 
@@ -286,7 +288,7 @@ tests = testGroup "Optimization" [
                      ]
                    }
                  ] 
-          astOut <- withModuleFromAST' context astIn $ \mIn -> do
+          astOut <- withModuleFromAST context astIn $ \mIn -> do
             runPassManager passManager mIn
             moduleAST mIn
           astOut @?= Module "<string>" "<string>" Nothing Nothing [

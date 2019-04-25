@@ -1,5 +1,6 @@
 {-# LANGUAGE
-  ForeignFunctionInterface
+  ForeignFunctionInterface,
+  OverloadedStrings
   #-}
 module LLVM.Test.ExecutionEngine where
 
@@ -48,7 +49,7 @@ testJIT withEE = withContext $ \context -> withEE context $ \executionEngine -> 
                }
               ]
 
-  s <- withModuleFromAST' context mAST $ \m -> do
+  s <- withModuleFromAST context mAST $ \m -> do
         withModuleInEngine executionEngine m $ \em -> do
           Just p <- getFunction em (Name "_foo")
           (mkIO32Stub ((castFunPtr p) :: FunPtr (Word32 -> IO Word32))) 7
