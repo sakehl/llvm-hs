@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP, FlexibleInstances #-}
 import Control.Exception (SomeException, try)
 import Control.Monad
 import Data.Functor
@@ -18,15 +18,32 @@ import Distribution.Version
 import System.Environment
 import Distribution.System
 
+#ifdef MIN_VERSION_Cabal
+#if MIN_VERSION_Cabal(2,0,0)
+#define MIN_VERSION_Cabal_2_0_0
+#endif
+#endif
+
 -- define these selectively in C files (we are _not_ using HsFFI.h),
 -- rather than universally in the ccOptions, because HsFFI.h currently defines them
 -- without checking they're already defined and so causes warnings.
 uncheckedHsFFIDefines = ["__STDC_LIMIT_MACROS"]
 
-llvmVersion = Version [4,0] []
+#ifndef MIN_VERSION_Cabal_2_0_0
+mkVersion ver = Version ver []
+versionNumbers = versionBranch
+mkFlagName = FlagName
+#endif
+
+#if !(MIN_VERSION_Cabal(2,1,0))
+lookupFlagAssignment :: FlagName -> FlagAssignment -> Maybe Bool
+lookupFlagAssignment = lookup
+#endif
+
+llvmVersion = mkVersion [4,0]
 
 llvmConfigNames = [
-  "llvm-config-" ++ (intercalate "." . map show . versionBranch $ llvmVersion),
+  "llvm-config-" ++ (intercalate "." . map show . versionNumbers $ llvmVersion),
   "llvm-config"
  ]
 
@@ -138,11 +155,11 @@ main = do
       [llvmVersion] <- liftM lines $ llvmConfig ["--version"]
       let getLibs = liftM (map (fromJust . stripPrefix "-l") . words) . llvmConfig
           flags    = configConfigurationsFlags configFlags
-          linkFlag = case lookup (FlagName "shared-llvm") flags of
-                       Nothing     -> "--link-static"
+          linkFlag = case lookupFlagAssignment (mkFlagName "shared-llvm") flags of
+                       Nothing     -> "--link-shared"
                        Just shared -> if shared then "--link-shared" else "--link-static"
       libs       <- getLibs ["--libs", linkFlag]
-      systemLibs <- getLibs ["--system-libs"]
+      systemLibs <- getLibs ["--system-libs", linkFlag]
 
       let genericPackageDescription' = genericPackageDescription {
             condLibrary = do
@@ -152,7 +169,7 @@ main = do
                     libBuildInfo =
                       mempty {
                         ccOptions = llvmCxxFlags,
-                        extraLibs = stdLib : libs ++ systemLibs
+                        extraLibs = libs ++ stdLib : systemLibs
                       }
                   }
               }
@@ -166,18 +183,30 @@ main = do
 
     hookedPreProcessors =
       let origHookedPreprocessors = hookedPreProcessors origUserHooks
+#ifdef MIN_VERSION_Cabal_2_0_0
+          newHsc buildInfo localBuildInfo componentLocalBuildInfo =
+#else
           newHsc buildInfo localBuildInfo =
+#endif
               PreProcessor {
-                  platformIndependent = platformIndependent (origHsc buildInfo localBuildInfo),
+                  platformIndependent = platformIndependent (origHsc buildInfo),
                   runPreProcessor = \inFiles outFiles verbosity -> do
                       llvmConfig <- getLLVMConfig (configFlags localBuildInfo)
                       llvmCFlags <- do
                           rawLlvmCFlags <- llvmConfig ["--cflags"]
                           return . filter (not . isIgnoredCFlag) $ words rawLlvmCFlags
                       let buildInfo' = buildInfo { ccOptions = "-Wno-variadic-macros" : llvmCFlags }
-                      runPreProcessor (origHsc buildInfo' localBuildInfo) inFiles outFiles verbosity
+                      runPreProcessor (origHsc buildInfo') inFiles outFiles verbosity
               }
-              where origHsc = fromMaybe ppHsc2hs (lookup "hsc" origHookedPreprocessors)
+              where origHsc buildInfo =
+                      fromMaybe
+                        ppHsc2hs
+                        (lookup "hsc" origHookedPreprocessors)
+                        buildInfo
+                        localBuildInfo
+#ifdef MIN_VERSION_Cabal_2_0_0
+                        componentLocalBuildInfo
+#endif
       in [("hsc", newHsc)] ++ origHookedPreprocessors,
 
     buildHook = \packageDescription localBuildInfo userHooks buildFlags -> do
