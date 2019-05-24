@@ -83,7 +83,7 @@ library
     llvm-hs-pure == 4.0.0.0
   hs-source-dirs: src
   extensions:
-    NoImplicitPrelude
+    --NoImplicitPrelude
     TupleSections
     DeriveDataTypeable
     DeriveGeneric

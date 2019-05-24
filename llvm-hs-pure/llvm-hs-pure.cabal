@@ -46,7 +46,7 @@ library
     parsec >= 3.1.3
   hs-source-dirs: src
   extensions:
-    NoImplicitPrelude
+    --NoImplicitPrelude
     TupleSections
     DeriveDataTypeable
     DeriveGeneric
